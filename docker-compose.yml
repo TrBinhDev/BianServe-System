@@ -3,16 +3,48 @@ version: '3.8'
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: bian_serve_db
+    container_name: bianserve-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
-      POSTGRES_DB: ${DB_NAME:-bian_serve}
+      POSTGRES_USER: ${DB_USER:-bianserve}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-bianserve123}
+      POSTGRES_DB: ${DB_NAME:-bianserve_db}
     ports:
-      - '${DB_PORT:-5432}:5432'
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bianserve-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: bianserve-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    networks:
+      - bianserve-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: bianserve-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@bianserve.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin123}
+    ports:
+      - '5050:80'
+    depends_on:
+      - postgres
+    networks:
+      - bianserve-network
 
 volumes:
   postgres_data:
+  redis_data:
+
+networks:
+  bianserve-network:
+    driver: bridge

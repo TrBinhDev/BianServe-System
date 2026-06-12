@@ -1,0 +1,205 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  staff
+}
+
+enum TableStatus {
+  available
+  occupied
+}
+
+enum OrderStatus {
+  pending
+  confirmed
+  completed
+  cancelled
+}
+
+enum DiscountType {
+  PERCENT
+  FIXED_AMOUNT
+}
+
+model Account {
+  id        String   @id @default(uuid())
+  code      String   @unique @db.VarChar(10)
+  password  String
+  role      Role
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  cancelledOrders Order[]          @relation("CancelledBy")
+  promotionUsages PromotionUsage[]
+
+  @@map("accounts")
+}
+
+model Table {
+  id          String      @id @default(uuid())
+  tableNumber String      @unique @map("table_number")
+  capacity    Int
+  status      TableStatus @default(available)
+  qrCode      String?     @map("qr_code")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  orders    Order[]
+  feedbacks Feedback[]
+
+  @@map("tables")
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  products            Product[]
+  promotionCategories PromotionCategory[]
+
+  @@map("categories")
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  imageUrl    String?  @map("image_url")
+  categoryId  String   @map("category_id")
+  isAvailable Boolean  @default(true) @map("is_available")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  category          Category          @relation(fields: [categoryId], references: [id])
+  orderItems        OrderItem[]
+  promotionProducts PromotionProduct[]
+
+  @@map("products")
+}
+
+model Order {
+  id           String      @id @default(uuid())
+  orderCode    String      @unique @map("order_code")
+  tableId      String      @map("table_id")
+  totalAmount  Decimal     @db.Decimal(10, 2) @map("total_amount")
+  status       OrderStatus @default(pending)
+  cancelReason String?     @map("cancel_reason")
+  cancelledBy  String?     @map("cancelled_by")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  table              Table            @relation(fields: [tableId], references: [id])
+  cancelledByAccount Account?         @relation("CancelledBy", fields: [cancelledBy], references: [id])
+  items              OrderItem[]
+  feedbacks          Feedback[]
+  promotionUsages    PromotionUsage[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String   @map("order_id")
+  productId String   @map("product_id")
+  quantity  Int
+  unitPrice Decimal  @db.Decimal(10, 2) @map("unit_price")
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  order   Order   @relation(fields: [orderId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+model Promotion {
+  id                String       @id @default(uuid())
+  name              String
+  code              String       @unique
+  type              DiscountType
+  value             Decimal      @db.Decimal(10, 2)
+  minOrderValue     Decimal?     @db.Decimal(10, 2) @map("min_order_value")
+  maxDiscountAmount Decimal?     @db.Decimal(10, 2) @map("max_discount_amount")
+  timeStart         String?      @map("time_start")
+  timeEnd           String?      @map("time_end")
+  dayOfWeek         Int[]        @map("day_of_week")
+  usageLimit        Int?         @map("usage_limit")
+  usedCount         Int          @default(0) @map("used_count")
+  perUserLimit      Int?         @map("per_user_limit")
+  startDate         DateTime     @map("start_date")
+  endDate           DateTime     @map("end_date")
+  isActive          Boolean      @default(true) @map("is_active")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  promotionProducts   PromotionProduct[]
+  promotionCategories PromotionCategory[]
+  promotionUsages     PromotionUsage[]
+
+  @@map("promotions")
+}
+
+model PromotionProduct {
+  promotionId String @map("promotion_id")
+  productId   String @map("product_id")
+
+  promotion Promotion @relation(fields: [promotionId], references: [id])
+  product   Product   @relation(fields: [productId], references: [id])
+
+  @@id([promotionId, productId])
+  @@map("promotion_products")
+}
+
+model PromotionCategory {
+  promotionId String @map("promotion_id")
+  categoryId  String @map("category_id")
+
+  promotion Promotion @relation(fields: [promotionId], references: [id])
+  category  Category  @relation(fields: [categoryId], references: [id])
+
+  @@id([promotionId, categoryId])
+  @@map("promotion_categories")
+}
+
+model PromotionUsage {
+  id            String   @id @default(uuid())
+  promotionId   String   @map("promotion_id")
+  accountId     String?  @map("account_id")
+  userSessionId String   @map("user_session_id")
+  orderId       String   @map("order_id")
+  usedAt        DateTime @default(now()) @map("used_at")
+
+  promotion Promotion @relation(fields: [promotionId], references: [id])
+  account   Account?  @relation(fields: [accountId], references: [id])
+  order     Order     @relation(fields: [orderId], references: [id])
+
+  @@map("promotion_usages")
+}
+
+model Feedback {
+  id        String   @id @default(uuid())
+  orderId   String   @unique @map("order_id")
+  tableId   String   @map("table_id")
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id])
+  table Table @relation(fields: [tableId], references: [id])
+
+  @@map("feedbacks")
+}

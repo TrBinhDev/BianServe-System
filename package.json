@@ -1,0 +1,22 @@
+{
+  "name": "bianserve-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "QR Ordering Platform for Restaurant",
+  "scripts": {
+    "dev:server": "pnpm --filter server dev",
+    "dev:management": "pnpm --filter management dev",
+    "dev:storefront": "pnpm --filter storefront dev",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.4.5",
+    "@types/node": "^20.12.7"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}
