@@ -9,6 +9,7 @@ import qrRoutes from './modules/qr/qr.routes';
 import categoryRoutes from './modules/categories/categories.routes';
 import productRoutes from './modules/products/products.routes';
 import orderRoutes, { adminOrderRouter } from './modules/orders/orders.routes';
+import promotionRoutes, { adminPromotionRouter } from './modules/promotions/promotions.routes';
 import { getMenu } from './modules/products/products.controller';
 
 const app: Express = express();
@@ -26,10 +27,12 @@ app.use('/api/admin/tables/:id/qr', qrRoutes);
 app.use('/api/admin/categories', categoryRoutes);
 app.use('/api/admin/products', productRoutes);
 app.use('/api/admin/orders', adminOrderRouter);
+app.use('/api/admin/promotions', adminPromotionRouter);
 
 // Public
 app.get('/api/menu', getMenu);
 app.use('/api/orders', orderRoutes);
+app.use('/api/promotions', promotionRoutes);
 
 app.use(errorHandler);
 
