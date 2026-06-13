@@ -1,19 +1,20 @@
-import prisma from "../../config/database";
-import { getIO } from "../../config/socket";
-import { AppError } from "../../shared/errors/AppError";
-import { MSG } from "../../shared/constants/messages";
-import { getPagination, buildPaginationMeta } from "../../shared/utils/pagination";
+import dayjs from 'dayjs';
+import prisma from '../../config/database';
+import { getIO } from '../../config/socket';
+import { AppError } from '../../shared/errors/AppError';
+import { MSG } from '../../shared/constants/messages';
+import { getPagination, buildPaginationMeta } from '../../shared/utils/pagination';
 import {
   CreateOrderInput,
   AddItemInput,
   UpdateItemInput,
   CancelOrderInput,
+  UpdateStatusInput,
   ListOrdersQuery,
-} from "./orders.schema";
+} from './orders.schema';
 
-// Gen mã đơn hàng: ORD-YYYYMMDD-XXXXX
 const generateOrderCode = (): string => {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const random = Math.floor(10000 + Math.random() * 90000);
   return `ORD-${date}-${random}`;
 };
@@ -26,11 +27,9 @@ const orderInclude = {
 };
 
 export const createOrder = async (input: CreateOrderInput) => {
-  // 1. Kiểm tra bàn tồn tại
   const table = await prisma.table.findUnique({ where: { id: input.tableId } });
   if (!table) throw new AppError(404, MSG.table.NOT_FOUND);
 
-  // 2. Lấy giá sản phẩm, kiểm tra còn bán không
   const productIds = input.items.map((i) => i.productId);
   const products = await prisma.product.findMany({
     where: { id: { in: productIds }, isAvailable: true },
@@ -41,13 +40,10 @@ export const createOrder = async (input: CreateOrderInput) => {
 
   const productMap = new Map(products.map((p) => [p.id, p]));
 
-  // 3. Tính tổng tiền
   const totalAmount = input.items.reduce((sum, item) => {
-    const product = productMap.get(item.productId)!;
-    return sum + Number(product.price) * item.quantity;
+    return sum + Number(productMap.get(item.productId)!.price) * item.quantity;
   }, 0);
 
-  // 4. Tạo order + items + cập nhật trạng thái bàn
   const order = await prisma.$transaction(async (tx) => {
     const newOrder = await tx.order.create({
       data: {
@@ -66,19 +62,17 @@ export const createOrder = async (input: CreateOrderInput) => {
       include: orderInclude,
     });
 
-    await tx.table.update({ where: { id: input.tableId }, data: { status: "occupied" } });
-
+    await tx.table.update({ where: { id: input.tableId }, data: { status: 'occupied' } });
     return newOrder;
   });
 
-  // 5. Emit socket cho admin/staff
-  getIO().emit("new_order", {
+  // Emit theo đúng tên design
+  getIO().emit('order_created', {
     orderId: order.id,
     orderCode: order.orderCode,
     tableId: order.tableId,
     table: order.table,
     totalAmount: order.totalAmount,
-    itemCount: order.items.length,
   });
 
   return order;
@@ -93,9 +87,11 @@ export const getOrderById = async (id: string) => {
 export const addItem = async (orderId: string, input: AddItemInput) => {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new AppError(404, MSG.order.NOT_FOUND);
-  if (order.status !== "pending") throw new AppError(400, MSG.order.INVALID_STATUS);
+  if (order.status !== 'pending') throw new AppError(400, MSG.order.INVALID_STATUS);
 
-  const product = await prisma.product.findUnique({ where: { id: input.productId, isAvailable: true } });
+  const product = await prisma.product.findUnique({
+    where: { id: input.productId, isAvailable: true },
+  });
   if (!product) throw new AppError(404, MSG.product.NOT_FOUND);
 
   const newTotal = Number(order.totalAmount) + Number(product.price) * input.quantity;
@@ -119,7 +115,7 @@ export const addItem = async (orderId: string, input: AddItemInput) => {
 export const updateItem = async (orderId: string, itemId: string, input: UpdateItemInput) => {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new AppError(404, MSG.order.NOT_FOUND);
-  if (order.status !== "pending") throw new AppError(400, MSG.order.INVALID_STATUS);
+  if (order.status !== 'pending') throw new AppError(400, MSG.order.INVALID_STATUS);
 
   const item = await prisma.orderItem.findUnique({ where: { id: itemId } });
   if (!item || item.orderId !== orderId) throw new AppError(404, MSG.order.ITEM_NOT_FOUND);
@@ -128,7 +124,10 @@ export const updateItem = async (orderId: string, itemId: string, input: UpdateI
   const newTotal = Number(order.totalAmount) + diff;
 
   await prisma.$transaction([
-    prisma.orderItem.update({ where: { id: itemId }, data: { quantity: input.quantity, note: input.note } }),
+    prisma.orderItem.update({
+      where: { id: itemId },
+      data: { quantity: input.quantity, note: input.note },
+    }),
     prisma.order.update({ where: { id: orderId }, data: { totalAmount: newTotal } }),
   ]);
 
@@ -138,7 +137,7 @@ export const updateItem = async (orderId: string, itemId: string, input: UpdateI
 export const deleteItem = async (orderId: string, itemId: string) => {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new AppError(404, MSG.order.NOT_FOUND);
-  if (order.status !== "pending") throw new AppError(400, MSG.order.INVALID_STATUS);
+  if (order.status !== 'pending') throw new AppError(400, MSG.order.INVALID_STATUS);
 
   const item = await prisma.orderItem.findUnique({ where: { id: itemId } });
   if (!item || item.orderId !== orderId) throw new AppError(404, MSG.order.ITEM_NOT_FOUND);
@@ -157,13 +156,19 @@ export const listOrders = async (query: ListOrdersQuery) => {
   const where: any = {};
   if (query.status) where.status = query.status;
   if (query.tableId) where.tableId = query.tableId;
+  if (query.search) where.orderCode = { contains: query.search, mode: 'insensitive' };
+  if (query.start_date || query.end_date) {
+    where.createdAt = {};
+    if (query.start_date) where.createdAt.gte = dayjs(query.start_date).startOf('day').toDate();
+    if (query.end_date) where.createdAt.lte = dayjs(query.end_date).endOf('day').toDate();
+  }
 
   const [orders, total] = await Promise.all([
     prisma.order.findMany({
       where,
       skip,
       take: limit,
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
       include: orderInclude,
     }),
     prisma.order.count({ where }),
@@ -172,73 +177,64 @@ export const listOrders = async (query: ListOrdersQuery) => {
   return { orders, meta: buildPaginationMeta(total, page, limit) };
 };
 
-export const confirmOrder = async (orderId: string) => {
+export const updateStatus = async (orderId: string, input: UpdateStatusInput) => {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new AppError(404, MSG.order.NOT_FOUND);
-  if (order.status !== "pending") throw new AppError(400, MSG.order.INVALID_STATUS);
 
-  const updated = await prisma.order.update({
-    where: { id: orderId },
-    data: { status: "confirmed" },
-    include: orderInclude,
+  if (input.status === 'confirmed' && order.status !== 'pending') {
+    throw new AppError(400, MSG.order.INVALID_STATUS);
+  }
+  if (input.status === 'completed' && order.status !== 'confirmed') {
+    throw new AppError(400, MSG.order.INVALID_STATUS);
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const result = await tx.order.update({
+      where: { id: orderId },
+      data: { status: input.status },
+      include: orderInclude,
+    });
+
+    if (input.status === 'completed') {
+      const activeOrders = await tx.order.count({
+        where: { tableId: order.tableId, status: { in: ['pending', 'confirmed'] } },
+      });
+      if (activeOrders === 0) {
+        await tx.table.update({ where: { id: order.tableId }, data: { status: 'available' } });
+      }
+    }
+
+    return result;
   });
 
-  getIO().emit("order_updated", { orderId, status: "confirmed" });
+  getIO().emit('order_status_changed', { orderId, status: input.status });
   return updated;
 };
 
 export const cancelOrder = async (orderId: string, accountId: string, input: CancelOrderInput) => {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new AppError(404, MSG.order.NOT_FOUND);
-  if (order.status === "completed" || order.status === "cancelled") {
+  if (order.status === 'completed' || order.status === 'cancelled') {
     throw new AppError(400, MSG.order.INVALID_STATUS);
   }
 
   const updated = await prisma.$transaction(async (tx) => {
     const cancelled = await tx.order.update({
       where: { id: orderId },
-      data: { status: "cancelled", cancelReason: input.cancelReason, cancelledBy: accountId },
+      data: { status: 'cancelled', cancelReason: input.cancelReason, cancelledBy: accountId },
       include: orderInclude,
     });
 
-    // Kiểm tra bàn còn đơn active không → nếu không thì available
     const activeOrders = await tx.order.count({
-      where: { tableId: order.tableId, status: { in: ["pending", "confirmed"] } },
+      where: { tableId: order.tableId, status: { in: ['pending', 'confirmed'] } },
     });
     if (activeOrders === 0) {
-      await tx.table.update({ where: { id: order.tableId }, data: { status: "available" } });
+      await tx.table.update({ where: { id: order.tableId }, data: { status: 'available' } });
     }
 
     return cancelled;
   });
 
-  getIO().emit("order_updated", { orderId, status: "cancelled" });
-  return updated;
-};
-
-export const completeOrder = async (orderId: string) => {
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
-  if (!order) throw new AppError(404, MSG.order.NOT_FOUND);
-  if (order.status !== "confirmed") throw new AppError(400, MSG.order.INVALID_STATUS);
-
-  const updated = await prisma.$transaction(async (tx) => {
-    const completed = await tx.order.update({
-      where: { id: orderId },
-      data: { status: "completed" },
-      include: orderInclude,
-    });
-
-    // Kiểm tra bàn còn đơn active không → nếu không thì available
-    const activeOrders = await tx.order.count({
-      where: { tableId: order.tableId, status: { in: ["pending", "confirmed"] } },
-    });
-    if (activeOrders === 0) {
-      await tx.table.update({ where: { id: order.tableId }, data: { status: "available" } });
-    }
-
-    return completed;
-  });
-
-  getIO().emit("order_updated", { orderId, status: "completed" });
+  getIO().emit('order_cancelled', { orderId, reason: input.cancelReason });
   return updated;
 };

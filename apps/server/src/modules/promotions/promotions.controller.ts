@@ -1,13 +1,22 @@
-import { Request, Response, NextFunction } from "express";
-import * as promotionsService from "./promotions.service";
+import { Request, Response, NextFunction } from 'express';
+import * as promotionsService from './promotions.service';
 import {
   createPromotionSchema,
   updatePromotionSchema,
   applyPromotionSchema,
   listPromotionsSchema,
-} from "./promotions.schema";
-import { sendSuccess, sendCreated } from "../../shared/utils/response";
-import { MSG } from "../../shared/constants/messages";
+} from './promotions.schema';
+import { sendSuccess, sendCreated } from '../../shared/utils/response';
+import { MSG } from '../../shared/constants/messages';
+
+export const listActivePromotions = async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await promotionsService.listActivePromotions();
+    sendSuccess(res, data, MSG.promotion.LIST_SUCCESS);
+  } catch (err) {
+    next(err);
+  }
+};
 
 export const createPromotion = async (req: Request, res: Response, next: NextFunction) => {
   try {

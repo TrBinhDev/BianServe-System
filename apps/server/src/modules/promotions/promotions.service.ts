@@ -1,14 +1,15 @@
-import dayjs from "dayjs";
-import prisma from "../../config/database";
-import { AppError } from "../../shared/errors/AppError";
-import { MSG } from "../../shared/constants/messages";
-import { getPagination, buildPaginationMeta } from "../../shared/utils/pagination";
+import dayjs from 'dayjs';
+import prisma from '../../config/database';
+import { getIO } from '../../config/socket';
+import { AppError } from '../../shared/errors/AppError';
+import { MSG } from '../../shared/constants/messages';
+import { getPagination, buildPaginationMeta } from '../../shared/utils/pagination';
 import {
   CreatePromotionInput,
   UpdatePromotionInput,
   ApplyPromotionInput,
   ListPromotionsQuery,
-} from "./promotions.schema";
+} from './promotions.schema';
 
 const promotionInclude = {
   promotionProducts: { include: { product: { select: { id: true, name: true } } } },
@@ -21,7 +22,7 @@ export const createPromotion = async (input: CreatePromotionInput) => {
 
   const { productIds, categoryIds, ...data } = input;
 
-  return prisma.promotion.create({
+  const promotion = await prisma.promotion.create({
     data: {
       ...data,
       startDate: new Date(data.startDate),
@@ -36,6 +37,9 @@ export const createPromotion = async (input: CreatePromotionInput) => {
     },
     include: promotionInclude,
   });
+
+  getIO().emit('promotions_updated', { action: 'created', promotionId: promotion.id });
+  return promotion;
 };
 
 export const listPromotions = async (query: ListPromotionsQuery) => {
@@ -44,11 +48,39 @@ export const listPromotions = async (query: ListPromotionsQuery) => {
   if (query.isActive !== undefined) where.isActive = query.isActive;
 
   const [promotions, total] = await Promise.all([
-    prisma.promotion.findMany({ where, skip, take: limit, orderBy: { createdAt: "desc" }, include: promotionInclude }),
+    prisma.promotion.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: promotionInclude,
+    }),
     prisma.promotion.count({ where }),
   ]);
 
   return { promotions, meta: buildPaginationMeta(total, page, limit) };
+};
+
+// Public: chỉ lấy KM đang hoạt động
+export const listActivePromotions = async () => {
+  const now = new Date();
+  return prisma.promotion.findMany({
+    where: {
+      isActive: true,
+      startDate: { lte: now },
+      endDate: { gte: now },
+    },
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      type: true,
+      value: true,
+      minOrderValue: true,
+      endDate: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
 };
 
 export const getPromotionById = async (id: string) => {
@@ -68,7 +100,7 @@ export const updatePromotion = async (id: string, input: UpdatePromotionInput) =
 
   const { productIds, categoryIds, ...data } = input;
 
-  return prisma.promotion.update({
+  const updated = await prisma.promotion.update({
     where: { id },
     data: {
       ...data,
@@ -77,60 +109,56 @@ export const updatePromotion = async (id: string, input: UpdatePromotionInput) =
     },
     include: promotionInclude,
   });
+
+  getIO().emit('promotions_updated', { action: 'updated', promotionId: id });
+  return updated;
 };
 
 export const deletePromotion = async (id: string) => {
   const promotion = await prisma.promotion.findUnique({ where: { id } });
   if (!promotion) throw new AppError(404, MSG.promotion.NOT_FOUND);
   await prisma.promotion.delete({ where: { id } });
+  getIO().emit('promotions_updated', { action: 'deleted', promotionId: id });
 };
 
 export const applyPromotion = async (input: ApplyPromotionInput) => {
   const now = dayjs();
 
-  // 1. Tìm mã
   const promotion = await prisma.promotion.findUnique({
     where: { code: input.code },
     include: promotionInclude,
   });
   if (!promotion || !promotion.isActive) throw new AppError(400, MSG.promotion.INVALID_CODE);
 
-  // 2. Kiểm tra thời hạn
   if (now.isBefore(dayjs(promotion.startDate)) || now.isAfter(dayjs(promotion.endDate))) {
     throw new AppError(400, MSG.promotion.EXPIRED);
   }
 
-  // 3. Kiểm tra giờ áp dụng
   if (promotion.timeStart && promotion.timeEnd) {
-    const currentTime = now.format("HH:mm");
+    const currentTime = now.format('HH:mm');
     if (currentTime < promotion.timeStart || currentTime > promotion.timeEnd) {
       throw new AppError(400, MSG.promotion.EXPIRED);
     }
   }
 
-  // 4. Kiểm tra ngày trong tuần (0=CN, 1=T2, ..., 6=T7)
   if (promotion.dayOfWeek.length > 0 && !promotion.dayOfWeek.includes(now.day())) {
     throw new AppError(400, MSG.promotion.EXPIRED);
   }
 
-  // 5. Lấy đơn hàng
   const order = await prisma.order.findUnique({
     where: { id: input.orderId },
     include: { items: { include: { product: true } } },
   });
   if (!order) throw new AppError(404, MSG.order.NOT_FOUND);
 
-  // 6. Kiểm tra giá trị đơn tối thiểu
   if (promotion.minOrderValue && Number(order.totalAmount) < Number(promotion.minOrderValue)) {
     throw new AppError(400, MSG.promotion.MIN_ORDER);
   }
 
-  // 7. Kiểm tra giới hạn tổng lượt
   if (promotion.usageLimit && promotion.usedCount >= promotion.usageLimit) {
     throw new AppError(400, MSG.promotion.USAGE_LIMIT);
   }
 
-  // 8. Kiểm tra per-user limit
   if (promotion.perUserLimit) {
     const userUsageCount = await prisma.promotionUsage.count({
       where: { promotionId: promotion.id, userSessionId: input.userSessionId },
@@ -140,7 +168,6 @@ export const applyPromotion = async (input: ApplyPromotionInput) => {
     }
   }
 
-  // 9. Kiểm tra áp dụng theo sản phẩm/danh mục
   const allowedProductIds = promotion.promotionProducts.map((p) => p.productId);
   const allowedCategoryIds = promotion.promotionCategories.map((c) => c.categoryId);
 
@@ -155,9 +182,8 @@ export const applyPromotion = async (input: ApplyPromotionInput) => {
     if (!hasMatch) throw new AppError(400, MSG.promotion.INVALID_CODE);
   }
 
-  // 10. Tính tiền giảm
   let discountAmount = 0;
-  if (promotion.type === "PERCENT") {
+  if (promotion.type === 'PERCENT') {
     discountAmount = (Number(order.totalAmount) * Number(promotion.value)) / 100;
     if (promotion.maxDiscountAmount) {
       discountAmount = Math.min(discountAmount, Number(promotion.maxDiscountAmount));
@@ -168,7 +194,6 @@ export const applyPromotion = async (input: ApplyPromotionInput) => {
 
   const finalAmount = Math.max(0, Number(order.totalAmount) - discountAmount);
 
-  // 11. Lưu usage + tăng usedCount
   await prisma.$transaction([
     prisma.promotionUsage.create({
       data: {
@@ -183,10 +208,5 @@ export const applyPromotion = async (input: ApplyPromotionInput) => {
     }),
   ]);
 
-  return {
-    promotionId: promotion.id,
-    code: promotion.code,
-    discountAmount,
-    finalAmount,
-  };
+  return { promotionId: promotion.id, code: promotion.code, discountAmount, finalAmount };
 };

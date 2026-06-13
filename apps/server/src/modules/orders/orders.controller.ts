@@ -1,14 +1,15 @@
-import { Request, Response, NextFunction } from "express";
-import * as ordersService from "./orders.service";
+import { Request, Response, NextFunction } from 'express';
+import * as ordersService from './orders.service';
 import {
   createOrderSchema,
   addItemSchema,
   updateItemSchema,
   cancelOrderSchema,
+  updateStatusSchema,
   listOrdersSchema,
-} from "./orders.schema";
-import { sendSuccess, sendCreated } from "../../shared/utils/response";
-import { MSG } from "../../shared/constants/messages";
+} from './orders.schema';
+import { sendSuccess, sendCreated } from '../../shared/utils/response';
+import { MSG } from '../../shared/constants/messages';
 
 interface AuthRequest extends Request {
   user?: { id: string; code: string; role: string };
@@ -83,9 +84,10 @@ export const getOrderByIdAdmin = async (req: Request, res: Response, next: NextF
   }
 };
 
-export const confirmOrder = async (req: Request, res: Response, next: NextFunction) => {
+export const updateStatus = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const data = await ordersService.confirmOrder(req.params.id);
+    const input = updateStatusSchema.parse(req.body);
+    const data = await ordersService.updateStatus(req.params.id, input);
     sendSuccess(res, data, MSG.order.UPDATED);
   } catch (err) {
     next(err);
@@ -97,15 +99,6 @@ export const cancelOrder = async (req: AuthRequest, res: Response, next: NextFun
     const input = cancelOrderSchema.parse(req.body);
     const data = await ordersService.cancelOrder(req.params.id, req.user!.id, input);
     sendSuccess(res, data, MSG.order.CANCELLED);
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const completeOrder = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const data = await ordersService.completeOrder(req.params.id);
-    sendSuccess(res, data, MSG.order.COMPLETED);
   } catch (err) {
     next(err);
   }
