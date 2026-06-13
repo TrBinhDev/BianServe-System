@@ -11,6 +11,7 @@ import productRoutes from './modules/products/products.routes';
 import orderRoutes, { adminOrderRouter } from './modules/orders/orders.routes';
 import promotionRoutes, { adminPromotionRouter } from './modules/promotions/promotions.routes';
 import statisticsRoutes from './modules/statistics/statistics.routes';
+import feedbackRoutes, { adminFeedbackRouter } from './modules/feedbacks/feedbacks.routes';
 import { getMenu } from './modules/products/products.controller';
 
 const app: Express = express();
@@ -30,11 +31,13 @@ app.use('/api/admin/products', productRoutes);
 app.use('/api/admin/orders', adminOrderRouter);
 app.use('/api/admin/promotions', adminPromotionRouter);
 app.use('/api/admin/statistics', statisticsRoutes);
+app.use('/api/admin/feedbacks', adminFeedbackRouter);
 
 // Public
 app.get('/api/menu', getMenu);
 app.use('/api/orders', orderRoutes);
 app.use('/api/promotions', promotionRoutes);
+app.use('/api/feedbacks', feedbackRoutes);
 
 app.use(errorHandler);
 
