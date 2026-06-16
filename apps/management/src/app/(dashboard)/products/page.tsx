@@ -3,7 +3,8 @@
 
 import { useEffect, useState } from 'react';
 import { productsService } from '@/services/products.service';
-import { Product, PaginationMeta } from '@/types';
+import { categoriesService } from '@/services/categories.service';
+import { Product, PaginationMeta, Category } from '@/types';
 import ProductTable from '@/components/shared/products/product-table';
 import ProductForm from '@/components/shared/products/product-form';
 import { Search, Plus, Loader2 } from 'lucide-react';
@@ -24,6 +25,8 @@ export default function ProductsPage() {
   const [meta, setMeta] = useState<PaginationMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [categories, setCategories] = useState<Category[]>([]);
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
@@ -31,11 +34,23 @@ export default function ProductsPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
+    categoriesService
+      .list()
+      .then(setCategories)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
       try {
-        const data = await productsService.list({ page, limit: 10, search: search || undefined });
+        const data = await productsService.list({
+          page,
+          limit: 10,
+          search: search || undefined,
+          categoryId: categoryFilter || undefined,
+        });
         if (!cancelled) {
           setProducts(data.products);
           setMeta(data.meta);
@@ -50,11 +65,16 @@ export default function ProductsPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, search]);
+  }, [page, search, categoryFilter]);
 
   const refetch = async () => {
     try {
-      const data = await productsService.list({ page, limit: 10, search: search || undefined });
+      const data = await productsService.list({
+        page,
+        limit: 10,
+        search: search || undefined,
+        categoryId: categoryFilter || undefined,
+      });
       setProducts(data.products);
       setMeta(data.meta);
     } catch {
@@ -102,6 +122,25 @@ export default function ProductsPage() {
             className="w-full bg-white/[0.03] border border-white/[0.08] rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-orange-500/50"
           />
         </div>
+
+        <select
+          value={categoryFilter}
+          onChange={(e) => {
+            setCategoryFilter(e.target.value);
+            setPage(1);
+          }}
+          className="bg-white/[0.03] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-orange-500/50"
+        >
+          <option value="" className="bg-[#1a1a1a]">
+            Tất cả danh mục
+          </option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id} className="bg-[#1a1a1a]">
+              {c.name}
+            </option>
+          ))}
+        </select>
+
         <button
           onClick={() => setShowForm(true)}
           className="flex items-center gap-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-medium rounded-xl px-4 py-2.5 transition-all"
@@ -129,7 +168,11 @@ export default function ProductsPage() {
               <button
                 key={i}
                 onClick={() => setPage(i + 1)}
-                className={`w-8 h-8 rounded-lg text-xs transition-all ${page === i + 1 ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'text-zinc-500 hover:text-white hover:bg-white/[0.05]'}`}
+                className={`w-8 h-8 rounded-lg text-xs transition-all ${
+                  page === i + 1
+                    ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                    : 'text-zinc-500 hover:text-white hover:bg-white/[0.05]'
+                }`}
               >
                 {i + 1}
               </button>
@@ -149,7 +192,7 @@ export default function ProductsPage() {
       />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
-        <AlertDialogContent className="bg-[#161616] border-white/[0.08] text-white [&>div:last-child]:bg-[#161616]">
+        <AlertDialogContent className="bg-[#161616] border-white/[0.08] text-white">
           <AlertDialogHeader>
             <AlertDialogTitle>Xóa món &quot;{deleteTarget?.name}&quot;?</AlertDialogTitle>
             <AlertDialogDescription className="text-zinc-500">

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { promotionsService } from '@/services/promotions.service';
 import { Promotion, PaginationMeta } from '@/types';
 import { useSocketStore } from '@/stores/socket.store';
@@ -10,9 +10,14 @@ import PromotionForm from '@/components/shared/promotions/promotion-form';
 import { Plus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel,
-  AlertDialogContent, AlertDialogDescription,
-  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
 export default function PromotionsPage() {
@@ -43,10 +48,12 @@ export default function PromotionsPage() {
       }
     };
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [page]);
 
-  const refetch = async () => {
+  const refetch = useCallback(async () => {
     try {
       const data = await promotionsService.list({ page, limit: 10 });
       setPromotions(data.promotions);
@@ -54,15 +61,16 @@ export default function PromotionsPage() {
     } catch {
       toast.error('Không thể tải danh sách khuyến mãi');
     }
-  };
+  }, [page]);
 
   // Realtime socket
   useEffect(() => {
     if (!socket) return;
-    const handleUpdate = () => setTimeout(() => refetch(), 0);
-    socket.on('promotions_updated', handleUpdate);
-    return () => { socket.off('promotions_updated', handleUpdate); };
-  }, [socket]);
+    socket.on('promotions_updated', refetch);
+    return () => {
+      socket.off('promotions_updated', refetch);
+    };
+  }, [socket, refetch]);
 
   const handleToggleActive = async (promotion: Promotion) => {
     try {
@@ -93,8 +101,10 @@ export default function PromotionsPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <p className="text-xs text-zinc-500">{meta?.total ?? 0} khuyến mãi</p>
-        <button onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-medium rounded-xl px-4 py-2.5 transition-all">
+        <button
+          onClick={() => setShowForm(true)}
+          className="flex items-center gap-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-medium rounded-xl px-4 py-2.5 transition-all"
+        >
           <Plus className="w-4 h-4" /> Thêm khuyến mãi
         </button>
       </div>
@@ -102,7 +112,10 @@ export default function PromotionsPage() {
       <PromotionTable
         promotions={promotions}
         loading={loading}
-        onEdit={(p) => { setEditPromotion(p); setShowForm(true); }}
+        onEdit={(p) => {
+          setEditPromotion(p);
+          setShowForm(true);
+        }}
         onDelete={setDeleteTarget}
         onToggleActive={handleToggleActive}
       />
@@ -112,8 +125,11 @@ export default function PromotionsPage() {
           <p className="text-xs text-zinc-500">{meta.total} khuyến mãi</p>
           <div className="flex gap-1">
             {[...Array(meta.totalPages)].map((_, i) => (
-              <button key={i} onClick={() => setPage(i + 1)}
-                className={`w-8 h-8 rounded-lg text-xs transition-all ${page === i + 1 ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'text-zinc-500 hover:text-white hover:bg-white/[0.05]'}`}>
+              <button
+                key={i}
+                onClick={() => setPage(i + 1)}
+                className={`w-8 h-8 rounded-lg text-xs transition-all ${page === i + 1 ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'text-zinc-500 hover:text-white hover:bg-white/[0.05]'}`}
+              >
                 {i + 1}
               </button>
             ))}
@@ -123,7 +139,10 @@ export default function PromotionsPage() {
 
       <PromotionForm
         open={showForm}
-        onClose={() => { setShowForm(false); setEditPromotion(null); }}
+        onClose={() => {
+          setShowForm(false);
+          setEditPromotion(null);
+        }}
         onSuccess={refetch}
         promotion={editPromotion}
       />
@@ -132,11 +151,19 @@ export default function PromotionsPage() {
         <AlertDialogContent className="bg-[#161616] border-white/[0.08] text-white [&>div:last-child]:bg-[#161616]">
           <AlertDialogHeader>
             <AlertDialogTitle>Xóa khuyến mãi &quot;{deleteTarget?.name}&quot;?</AlertDialogTitle>
-            <AlertDialogDescription className="text-zinc-500">Hành động này không thể hoàn tác.</AlertDialogDescription>
+            <AlertDialogDescription className="text-zinc-500">
+              Hành động này không thể hoàn tác.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-white/[0.03] border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.06]">Hủy</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} disabled={deleteLoading} className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400">
+            <AlertDialogCancel className="bg-white/[0.03] border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.06]">
+              Hủy
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleteLoading}
+              className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400"
+            >
               {deleteLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />} Xóa
             </AlertDialogAction>
           </AlertDialogFooter>

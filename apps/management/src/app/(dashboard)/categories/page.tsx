@@ -81,7 +81,7 @@ export default function CategoriesPage() {
   };
 
   return (
-    <div className="space-y-5 max-w-2xl">
+    <div className="space-y-5">
       <div className="flex items-center justify-between">
         <p className="text-xs text-zinc-500">{categories.length} danh mục</p>
         <button

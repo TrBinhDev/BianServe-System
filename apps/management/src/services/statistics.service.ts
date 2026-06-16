@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import api from "@/lib/axios";
-import { ApiResponse } from "@/types";
+import api from '@/lib/axios';
+import { ApiResponse } from '@/types';
 
 interface DateRangeParams {
   start_date?: string;
@@ -9,47 +9,71 @@ interface DateRangeParams {
 
 export const statisticsService = {
   getDashboard: async () => {
-    const { data } = await api.get<ApiResponse<any>>("/admin/statistics/dashboard");
+    const { data } = await api.get<ApiResponse<any>>('/admin/statistics/dashboard');
     return data.data;
   },
 
-  getRevenue: async (params?: DateRangeParams & { type?: "day" | "week" | "month" | "year" }) => {
-    const { data } = await api.get<ApiResponse<any>>("/admin/statistics/revenue", { params });
+  getRevenue: async (params?: DateRangeParams & { type?: 'day' | 'week' | 'month' | 'year' }) => {
+    const { data } = await api.get<ApiResponse<any>>('/admin/statistics/revenue', { params });
     return data.data;
   },
 
   getOrders: async (params?: DateRangeParams) => {
-    const { data } = await api.get<ApiResponse<any>>("/admin/statistics/orders", { params });
+    const { data } = await api.get<ApiResponse<any>>('/admin/statistics/orders', { params });
     return data.data;
   },
 
   getProducts: async (params?: DateRangeParams) => {
-    const { data } = await api.get<ApiResponse<any>>("/admin/statistics/products", { params });
+    const { data } = await api.get<ApiResponse<any>>('/admin/statistics/products', { params });
     return data.data;
   },
 
   getTables: async (params?: DateRangeParams) => {
-    const { data } = await api.get<ApiResponse<any>>("/admin/statistics/tables", { params });
+    const { data } = await api.get<ApiResponse<any>>('/admin/statistics/tables', { params });
     return data.data;
   },
 
   getPromotions: async (params?: DateRangeParams) => {
-    const { data } = await api.get<ApiResponse<any>>("/admin/statistics/promotions", { params });
+    const { data } = await api.get<ApiResponse<any>>('/admin/statistics/promotions', { params });
     return data.data;
   },
 
-  exportRevenue: (params?: DateRangeParams & { format?: "excel" | "pdf" }) => {
-    const query = new URLSearchParams(params as any).toString();
-    window.open(`${process.env.NEXT_PUBLIC_API_URL}/admin/statistics/export/revenue?${query}`);
+  exportRevenue: async (params?: DateRangeParams & { format?: 'excel' | 'pdf' }) => {
+    const response = await api.get('/admin/statistics/export/revenue', {
+      params,
+      responseType: 'blob',
+    });
+    const url = URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'revenue.xlsx';
+    link.click();
+    URL.revokeObjectURL(url);
   },
 
-  exportOrders: (params?: DateRangeParams) => {
-    const query = new URLSearchParams(params as any).toString();
-    window.open(`${process.env.NEXT_PUBLIC_API_URL}/admin/statistics/export/orders?${query}`);
+  exportOrders: async (params?: DateRangeParams) => {
+    const response = await api.get('/admin/statistics/export/orders', {
+      params,
+      responseType: 'blob',
+    });
+    const url = URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'orders.xlsx';
+    link.click();
+    URL.revokeObjectURL(url);
   },
 
-  exportProducts: (params?: DateRangeParams) => {
-    const query = new URLSearchParams(params as any).toString();
-    window.open(`${process.env.NEXT_PUBLIC_API_URL}/admin/statistics/export/products?${query}`);
+  exportProducts: async (params?: DateRangeParams) => {
+    const response = await api.get('/admin/statistics/export/products', {
+      params,
+      responseType: 'blob',
+    });
+    const url = URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'top-products.xlsx';
+    link.click();
+    URL.revokeObjectURL(url);
   },
 };
