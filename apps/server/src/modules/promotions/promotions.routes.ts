@@ -7,6 +7,7 @@ const router: IRouter = Router();
 
 // Public
 router.get('/', promotionsController.listActivePromotions);
+router.post('/preview', promotionsController.previewPromotion);
 router.post('/apply', promotionsController.applyPromotion);
 
 export default router;

@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { Order } from "@/types";
-import OrderStatusBadge from "./order-status-badge";
-import dayjs from "dayjs";
-import { useRouter } from "next/navigation";
+import { Order } from '@/types';
+import OrderStatusBadge from './order-status-badge';
+import dayjs from 'dayjs';
+import { useRouter } from 'next/navigation';
 
 interface Props {
   orders: Order[];
@@ -12,7 +12,7 @@ interface Props {
 }
 
 export default function OrderTable({ orders, loading, onRowClick }: Props) {
-  const headers = ["Mã đơn", "Bàn", "Số món", "Tổng tiền", "Trạng thái", "Thời gian", ""];
+  const headers = ['Mã đơn', 'Bàn', 'Số món', 'Tổng tiền', 'Trạng thái', 'Thời gian', ''];
 
   return (
     <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
@@ -20,7 +20,9 @@ export default function OrderTable({ orders, loading, onRowClick }: Props) {
         <thead>
           <tr className="border-b border-white/[0.06]">
             {headers.map((h) => (
-              <th key={h} className="text-left text-xs font-medium text-zinc-500 px-5 py-3.5">{h}</th>
+              <th key={h} className="text-left text-xs font-medium text-zinc-500 px-5 py-3.5">
+                {h}
+              </th>
             ))}
           </tr>
         </thead>
@@ -51,13 +53,22 @@ export default function OrderTable({ orders, loading, onRowClick }: Props) {
                 <td className="px-5 py-4 text-sm text-white">Bàn {order.table.tableNumber}</td>
                 <td className="px-5 py-4 text-sm text-zinc-400">{order.items.length} món</td>
                 <td className="px-5 py-4 text-sm text-orange-400 font-medium">
-                  {Number(order.totalAmount).toLocaleString("vi-VN")}đ
+                  {order.discountAmount && order.finalAmount != null ? (
+                    <div>
+                      <span className="text-xs text-zinc-500 line-through block">
+                        {Number(order.totalAmount).toLocaleString('vi-VN')}đ
+                      </span>
+                      <span>{Number(order.finalAmount).toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  ) : (
+                    <span>{Number(order.totalAmount).toLocaleString('vi-VN')}đ</span>
+                  )}
                 </td>
                 <td className="px-5 py-4">
                   <OrderStatusBadge status={order.status} />
                 </td>
                 <td className="px-5 py-4 text-sm text-zinc-500">
-                  {dayjs(order.createdAt).format("HH:mm DD/MM")}
+                  {dayjs(order.createdAt).format('HH:mm DD/MM')}
                 </td>
                 <td className="px-5 py-4 text-right">
                   <button

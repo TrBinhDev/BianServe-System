@@ -87,11 +87,13 @@ export default function OrdersPage() {
     socket.on('order_created', handleNewOrder);
     socket.on('order_status_changed', handleUpdate);
     socket.on('order_cancelled', handleUpdate);
+    socket.on('order_updated', handleUpdate); 
 
     return () => {
       socket.off('order_created', handleNewOrder);
       socket.off('order_status_changed', handleUpdate);
       socket.off('order_cancelled', handleUpdate);
+      socket.off('order_updated', handleUpdate); 
     };
   }, [socket, fetchOrders]);
 

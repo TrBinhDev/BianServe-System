@@ -5,6 +5,7 @@ import {
   updatePromotionSchema,
   applyPromotionSchema,
   listPromotionsSchema,
+  previewPromotionSchema,
 } from './promotions.schema';
 import { sendSuccess, sendCreated } from '../../shared/utils/response';
 import { MSG } from '../../shared/constants/messages';
@@ -70,6 +71,16 @@ export const applyPromotion = async (req: Request, res: Response, next: NextFunc
   try {
     const input = applyPromotionSchema.parse(req.body);
     const data = await promotionsService.applyPromotion(input);
+    sendSuccess(res, data, MSG.promotion.APPLIED);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const previewPromotion = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = previewPromotionSchema.parse(req.body);
+    const data = await promotionsService.previewPromotion(input);
     sendSuccess(res, data, MSG.promotion.APPLIED);
   } catch (err) {
     next(err);

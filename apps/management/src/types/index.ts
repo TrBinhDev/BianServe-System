@@ -1,5 +1,5 @@
 // ─── Auth ────────────────────────────────────────────────────
-export type Role = "admin" | "staff";
+export type Role = 'admin' | 'staff';
 
 export interface User {
   id: string;
@@ -24,7 +24,7 @@ export interface Account {
 }
 
 // ─── Table ───────────────────────────────────────────────────
-export type TableStatus = "available" | "occupied";
+export type TableStatus = 'available' | 'occupied';
 
 export interface Table {
   id: string;
@@ -61,7 +61,7 @@ export interface Product {
 }
 
 // ─── Order ───────────────────────────────────────────────────
-export type OrderStatus = "pending" | "confirmed" | "completed" | "cancelled";
+export type OrderStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
 export interface OrderItem {
   id: string;
@@ -79,16 +79,17 @@ export interface Order {
   tableId: string;
   table: { id: string; tableNumber: string };
   totalAmount: number;
+  discountAmount: number | null;
+  finalAmount: number | null;
+  promotionCode: string | null;
   status: OrderStatus;
   cancelReason: string | null;
-  cancelledBy: string | null;
   items: OrderItem[];
   createdAt: string;
-  updatedAt: string;
 }
 
 // ─── Promotion ───────────────────────────────────────────────
-export type DiscountType = "PERCENT" | "FIXED_AMOUNT";
+export type DiscountType = 'PERCENT' | 'FIXED_AMOUNT';
 
 export interface Promotion {
   id: string;

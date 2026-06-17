@@ -90,11 +90,32 @@ export default function OrderDetail({ order, open, onClose, onUpdated }: Props) 
             </div>
             <div className="bg-white/[0.03] rounded-xl p-3">
               <p className="text-zinc-500 text-xs mb-1">Tổng tiền</p>
-              <p className="font-medium text-orange-400">
-                {Number(order.totalAmount).toLocaleString('vi-VN')}đ
-              </p>
+              {order.discountAmount && order.finalAmount != null ? (
+                <div>
+                  <p className="text-xs text-zinc-500 line-through">
+                    {Number(order.totalAmount).toLocaleString('vi-VN')}đ
+                  </p>
+                  <p className="font-medium text-orange-400">
+                    {Number(order.finalAmount).toLocaleString('vi-VN')}đ
+                  </p>
+                </div>
+              ) : (
+                <p className="font-medium text-orange-400">
+                  {Number(order.totalAmount).toLocaleString('vi-VN')}đ
+                </p>
+              )}
             </div>
           </div>
+
+          {/* Promotion info */}
+          {order.discountAmount && order.promotionCode && (
+            <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-xl px-4 py-3 flex items-center justify-between">
+              <p className="text-xs text-emerald-400">Đã áp mã {order.promotionCode}</p>
+              <p className="text-sm text-emerald-400 font-medium">
+                -{Number(order.discountAmount).toLocaleString('vi-VN')}đ
+              </p>
+            </div>
+          )}
 
           {/* Items */}
           <div>

@@ -9,6 +9,7 @@ import {
   UpdatePromotionInput,
   ApplyPromotionInput,
   ListPromotionsQuery,
+  PreviewPromotionInput,
 } from './promotions.schema';
 
 const promotionInclude = {
@@ -206,7 +207,98 @@ export const applyPromotion = async (input: ApplyPromotionInput) => {
       where: { id: promotion.id },
       data: { usedCount: { increment: 1 } },
     }),
+    prisma.order.update({
+      where: { id: input.orderId },
+      data: { discountAmount, finalAmount, promotionCode: promotion.code },
+    }),
   ]);
+
+  getIO().emit('order_updated', { orderId: input.orderId }); 
+
+  return { promotionId: promotion.id, code: promotion.code, discountAmount, finalAmount };
+};
+
+export const previewPromotion = async (input: PreviewPromotionInput) => {
+  const now = dayjs();
+
+  const promotion = await prisma.promotion.findUnique({
+    where: { code: input.code },
+    include: promotionInclude,
+  });
+  if (!promotion || !promotion.isActive) throw new AppError(400, MSG.promotion.INVALID_CODE);
+
+  if (now.isBefore(dayjs(promotion.startDate)) || now.isAfter(dayjs(promotion.endDate))) {
+    throw new AppError(400, MSG.promotion.EXPIRED);
+  }
+
+  if (promotion.timeStart && promotion.timeEnd) {
+    const currentTime = now.format('HH:mm');
+    if (currentTime < promotion.timeStart || currentTime > promotion.timeEnd) {
+      throw new AppError(400, MSG.promotion.EXPIRED);
+    }
+  }
+
+  if (promotion.dayOfWeek.length > 0 && !promotion.dayOfWeek.includes(now.day())) {
+    throw new AppError(400, MSG.promotion.EXPIRED);
+  }
+
+  const productIds = input.items.map((i) => i.productId);
+  const products = await prisma.product.findMany({
+    where: { id: { in: productIds } },
+    select: { id: true, price: true, categoryId: true },
+  });
+
+  if (products.length !== productIds.length) {
+    // Thay bằng MSG.product.NOT_FOUND nếu bạn có constant này
+    throw new AppError(404, 'Một số sản phẩm trong giỏ hàng không tồn tại');
+  }
+
+  const priceMap = new Map(products.map((p) => [p.id, Number(p.price)]));
+  const totalAmount = input.items.reduce(
+    (sum, item) => sum + (priceMap.get(item.productId) ?? 0) * item.quantity,
+    0
+  );
+
+  if (promotion.minOrderValue && totalAmount < Number(promotion.minOrderValue)) {
+    throw new AppError(400, MSG.promotion.MIN_ORDER);
+  }
+
+  if (promotion.usageLimit && promotion.usedCount >= promotion.usageLimit) {
+    throw new AppError(400, MSG.promotion.USAGE_LIMIT);
+  }
+
+  if (promotion.perUserLimit && input.userSessionId) {
+    const userUsageCount = await prisma.promotionUsage.count({
+      where: { promotionId: promotion.id, userSessionId: input.userSessionId },
+    });
+    if (userUsageCount >= promotion.perUserLimit) {
+      throw new AppError(400, MSG.promotion.USAGE_LIMIT);
+    }
+  }
+
+  const allowedProductIds = promotion.promotionProducts.map((p) => p.productId);
+  const allowedCategoryIds = promotion.promotionCategories.map((c) => c.categoryId);
+
+  if (allowedProductIds.length > 0 || allowedCategoryIds.length > 0) {
+    const itemCategoryIds = products.map((p) => p.categoryId);
+    const hasMatch =
+      productIds.some((id) => allowedProductIds.includes(id)) ||
+      itemCategoryIds.some((id) => allowedCategoryIds.includes(id));
+
+    if (!hasMatch) throw new AppError(400, MSG.promotion.INVALID_CODE);
+  }
+
+  let discountAmount = 0;
+  if (promotion.type === 'PERCENT') {
+    discountAmount = (totalAmount * Number(promotion.value)) / 100;
+    if (promotion.maxDiscountAmount) {
+      discountAmount = Math.min(discountAmount, Number(promotion.maxDiscountAmount));
+    }
+  } else {
+    discountAmount = Number(promotion.value);
+  }
+
+  const finalAmount = Math.max(0, totalAmount - discountAmount);
 
   return { promotionId: promotion.id, code: promotion.code, discountAmount, finalAmount };
 };

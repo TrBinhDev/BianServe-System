@@ -32,6 +32,21 @@ export const listPromotionsSchema = z.object({
   isActive: z.coerce.boolean().optional(),
 });
 
+export const previewPromotionSchema = z.object({
+  code: z.string().min(1, "Mã khuyến mãi không được để trống"),
+  items: z
+    .array(
+      z.object({
+        productId: z.string().uuid(),
+        quantity: z.number().int().positive(),
+      })
+    )
+    .min(1, "Giỏ hàng trống"),
+  userSessionId: z.string().optional(),
+});
+
+export type PreviewPromotionInput = z.infer<typeof previewPromotionSchema>;
+
 export type CreatePromotionInput = z.infer<typeof createPromotionSchema>;
 export type UpdatePromotionInput = z.infer<typeof updatePromotionSchema>;
 export type ApplyPromotionInput = z.infer<typeof applyPromotionSchema>;
